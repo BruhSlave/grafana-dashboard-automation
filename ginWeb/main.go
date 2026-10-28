@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/gin-gonic/gin"
-)	
+)
 
 type album struct {
 	ID     string  `json:"id"`
@@ -15,7 +15,7 @@ type album struct {
 }
 
 type Store struct {
-	mu sync.RWMutex
+	mu    sync.RWMutex
 	items map[string]album
 }
 
@@ -29,8 +29,9 @@ func main() {
 	store := NewStore()
 	router := gin.Default()
 	router.POST("/items", store.createItem)
-	router.GET("/items/:id", getAlbumByID)
-	router.PUT("/items/:id", putAlbumByID)
+	router.GET("/items/:id", store.getItem)
+	router.PUT("/items/:id", store.updateItem)
+	router.GET("/health", health)
 
 	if err := router.Run("localhost:8080"); err != nil {
 		panic(err)
@@ -40,7 +41,6 @@ func main() {
 func health(c *gin.Context) {
 	c.Status(http.StatusOK)
 }
-
 
 func (s *Store) createItem(c *gin.Context) {
 	var item album
@@ -67,38 +67,54 @@ func (s *Store) createItem(c *gin.Context) {
 	c.JSON(http.StatusCreated, item)
 }
 
-func getAlbumByID(c *gin.Context) {
+func (s *Store) getItem(c *gin.Context) {
 	id := c.Param("id")
 
-	for _, a := range albums {
-		if a.ID == id {
-			c.IndentedJSON(http.StatusOK, a)
-			return
-		}
-	}
-	c.IndentedJSON(http.StatusNotFound, gin.H{
-		"message:": "Album not found",
-		"code:":    http.StatusNotFound,
-	})
-}
+	s.mu.RLock()
+	item, exists := s.items[id]
+	s.mu.RUnlock()
 
-func putAlbumByID(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error:": "Invalid ID",
-			"code:":  http.StatusBadRequest,
+	if !exists {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "Item not found",
 		})
 		return
 	}
 
-	var updateAlbum album
-	if err := c.BindJSON(&updateAlbum); err != nil {
-		c.IndentedJSON(http.StatusBadRequest, gin.H{
-			"error:": "Invalid JSON",
-			"code:": http.StatusBadRequest,
+	c.JSON(http.StatusOK, item)
+}
+
+func (s *Store) updateItem(c *gin.Context) {
+	id := c.Param("id")
+
+	var item album
+	if err := c.ShouldBindJSON(&item); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid JSON",
 		})
+		return
 	}
 
-	for 
+	if item.ID != "" && item.ID != id {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "ID in body must match ID in URL",
+		})
+		return
+	}
+
+	item.ID = id
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, exists := s.items[id]; !exists {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "Item not found",
+		})
+		return
+	}
+
+	s.items[id] = item
+
+	c.JSON(http.StatusOK, item)
 }
