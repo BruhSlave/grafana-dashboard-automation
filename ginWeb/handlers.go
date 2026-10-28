@@ -29,7 +29,7 @@ func getHandlers(router *gin.Engine) gin.HandlerFunc {
 			})
 		}
 
-		c.JSON(http.StatusOK, gin.H{
+		c.IndentedJSON(http.StatusOK, gin.H{
 			"handlers": handlers,
 		})
 	}
