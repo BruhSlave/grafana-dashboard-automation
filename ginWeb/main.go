@@ -1,44 +1,70 @@
 package main
 
 import (
-	"github.com/gin-gonic/gin"
 	"net/http"
-)
+	"sync"
+
+	"github.com/gin-gonic/gin"
+)	
 
 type album struct {
-	ID     string `json:"id"`
-	Title  string `json:"title"`
-	Artist string `json:"artist"`
+	ID     string  `json:"id"`
+	Title  string  `json:"title"`
+	Artist string  `json:"artist"`
 	Price  float64 `json:"price"`
 }
 
-var albums = []album{
-	{ID: "1", Title: "Blue Train", Artist: "John Coltrane", Price: 56.99},
-	{ID: "2", Title: "Jeru", Artist: "Gerry Mulligan", Price: 17.99},
-	{ID: "3", Title: "Sarah Vaughan and Clifford Brown", Artist: "Sarah Vaughan", Price: 39.99},
+type Store struct {
+	mu sync.RWMutex
+	items map[string]album
+}
+
+func NewStore() *Store {
+	return &Store{
+		items: make(map[string]album),
+	}
 }
 
 func main() {
+	store := NewStore()
 	router := gin.Default()
-	router.GET("/albums", getAlbums)
-	router.POST("/albums", postAlbums)
-	router.GET("/albums/:id", getAlbumByID)
+	router.POST("/items", store.createItem)
+	router.GET("/items/:id", getAlbumByID)
+	router.PUT("/items/:id", putAlbumByID)
 
-	router.Run("localhost:8080")
+	if err := router.Run("localhost:8080"); err != nil {
+		panic(err)
+	}
 }
 
-func getAlbums(c *gin.Context) {
-	c.IndentedJSON(http.StatusOK, albums)
+func health(c *gin.Context) {
+	c.Status(http.StatusOK)
 }
 
-func postAlbums(c *gin.Context) {
-	var newAlbum album 
-	if err := c.BindJSON(&newAlbum); err != nil {
+
+func (s *Store) createItem(c *gin.Context) {
+	var item album
+
+	if err := c.ShouldBindJSON(&item); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid JSON or missing ID",
+		})
 		return
 	}
 
-	albums = append(albums, newAlbum)
-	c.IndentedJSON(http.StatusCreated, newAlbum)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, exists := s.items[item.ID]; exists {
+		c.JSON(http.StatusConflict, gin.H{
+			"error": "Item already exists",
+		})
+		return
+	}
+
+	s.items[item.ID] = item
+
+	c.JSON(http.StatusCreated, item)
 }
 
 func getAlbumByID(c *gin.Context) {
@@ -48,10 +74,31 @@ func getAlbumByID(c *gin.Context) {
 		if a.ID == id {
 			c.IndentedJSON(http.StatusOK, a)
 			return
-		} 
+		}
 	}
 	c.IndentedJSON(http.StatusNotFound, gin.H{
-		"message": "Album not found",
-		"code:": http.StatusNotFound,
+		"message:": "Album not found",
+		"code:":    http.StatusNotFound,
 	})
+}
+
+func putAlbumByID(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error:": "Invalid ID",
+			"code:":  http.StatusBadRequest,
+		})
+		return
+	}
+
+	var updateAlbum album
+	if err := c.BindJSON(&updateAlbum); err != nil {
+		c.IndentedJSON(http.StatusBadRequest, gin.H{
+			"error:": "Invalid JSON",
+			"code:": http.StatusBadRequest,
+		})
+	}
+
+	for 
 }
