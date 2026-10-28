@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 type album struct {
@@ -27,11 +28,16 @@ func NewStore() *Store {
 
 func main() {
 	store := NewStore()
+	metrics := NewMetrics()
+
 	router := gin.Default()
+	router.Use(metrics.Middleware())
 	router.POST("/items", store.createItem)
 	router.GET("/items/:id", store.getItem)
 	router.PUT("/items/:id", store.updateItem)
 	router.GET("/health", health)
+
+	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	if err := router.Run("localhost:8080"); err != nil {
 		panic(err)

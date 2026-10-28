@@ -1,6 +1,13 @@
 package main
 
-import "github.com/prometheus/client_golang/prometheus"
+import (
+	"os"
+	"strconv"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus"
+)
 
 type Metrics struct {
 	RequestDuration *prometheus.HistogramVec
@@ -49,4 +56,60 @@ func (m *Metrics) Register(reg prometheus.Registerer) error {
 	}
 
 	return nil
+}
+
+func (m *Metrics) Middleware() gin.HandlerFunc {
+	podID := os.Getenv("POD_ID")
+	if podID == "" {
+		podID = "unknown"
+	}
+
+	datacenter := os.Getenv("DATACENTER")
+	if datacenter == "" {
+		datacenter = "unknown"
+	}
+
+	return func(c *gin.Context) {
+		start := time.Now()
+
+		c.Next()
+
+		if c.Request.URL.Path == "/health" ||
+			c.Request.URL.Path == "/metrics" {
+			return
+		}
+
+		statusCode := c.Writer.Status()
+		method := c.Request.Method
+		route := c.FullPath()
+
+		if route == "" {
+			route = "unmatched"
+		}
+
+		labels := prometheus.Labels{
+			"pod_id":     podID,
+			"datacenter": datacenter,
+			"method":     method,
+			"route":      route,
+		}
+
+		m.RequestDuration.With(labels).Observe(
+			time.Since(start).Seconds(),
+		)
+
+		requestLabels := prometheus.Labels{
+			"pod_id":      podID,
+			"datacenter":  datacenter,
+			"method":      method,
+			"route":       route,
+			"status_code": strconv.Itoa(statusCode),
+		}
+
+		m.RequestTotal.With(requestLabels).Inc()
+
+		if statusCode >= 400 && statusCode < 600 {
+			m.ErrorsTotal.With(requestLabels).Inc()
+		}
+	}
 }
