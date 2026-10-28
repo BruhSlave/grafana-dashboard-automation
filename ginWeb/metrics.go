@@ -75,7 +75,8 @@ func (m *Metrics) Middleware() gin.HandlerFunc {
 		c.Next()
 
 		if c.Request.URL.Path == "/health" ||
-			c.Request.URL.Path == "/metrics" {
+			c.Request.URL.Path == "/metrics" ||
+			c.Request.URL.Path == "/handlers" {
 			return
 		}
 

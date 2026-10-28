@@ -36,8 +36,8 @@ func main() {
 	router.GET("/items/:id", store.getItem)
 	router.PUT("/items/:id", store.updateItem)
 	router.GET("/health", health)
-
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
+	router.GET("/handlers", getHandlers(router))
 
 	if err := router.Run("localhost:8080"); err != nil {
 		panic(err)
