@@ -99,14 +99,18 @@ func main() {
 	grafanaURL := os.Getenv("GRAFANA_URL")
 
 	if appURL == "" {
-			appURL = "http://localhost:8081"
+		appURL = "http://localhost:8081"
 	}
 
 	if grafanaURL == "" {
-			grafanaURL = "http://localhost:3000"
+		grafanaURL = "http://localhost:3000"
 	}
 
 	handlers, err := fetchHandlers(appURL)
+	if err != nil {
+		panic(err)
+	}
+
 	dashboard := createDashboard(handlers)
 
 	data, err := json.MarshalIndent(dashboard, "", "  ")
@@ -120,7 +124,7 @@ func main() {
 
 	fmt.Println("Dashboard saved to dashboard.json")
 
-if err := uploadDashboard(data, grafanaURL); err != nil {
+	if err := uploadDashboard(data, grafanaURL); err != nil {
 		panic(err)
 	}
 }
@@ -172,13 +176,15 @@ func createTrafficPanel() DashboardPanel {
 				Expr: `sum(rate(http_server_requests_total{
 									datacenter=~"$datacenter",
 									pod_id=~"$pod_id",
-									route=~"$route"
-								}[1m]))`, RefID: "A",
+									operations=~"$route"
+								}[1m]))`,
+				RefID: "A",
 				LegendFormat: "All Requests",
 			},
 		},
 	}
 }
+
 
 func createLatencyPanel() DashboardPanel {
 	return DashboardPanel{
@@ -198,46 +204,47 @@ func createLatencyPanel() DashboardPanel {
 		Targets: []PanelTarget{
 			{
 				Expr: `histogram_quantile(0.50,
-										sum by (le) (
-												rate(http_server_request_duration_seconds_bucket{
-														datacenter=~"$datacenter",
-														pod_id=~"$pod_id",
-														route=~"$route"
-												}[5m])
-									)
-								)`,
+					sum by (le) (
+						rate(http_server_request_duration_seconds_bucket{
+							datacenter=~"$datacenter",
+							pod_id=~"$pod_id",
+							operations=~"$route"
+						}[5m])
+					)
+				)`,
 				RefID:        "A",
 				LegendFormat: "p50",
 			},
 			{
 				Expr: `histogram_quantile(0.95,
-									sum by (le) (
-											rate(http_server_request_duration_seconds_bucket{
-													datacenter=~"$datacenter",
-													pod_id=~"$pod_id",
-													route=~"$route"
-											}[5m])
-									)
-								)`,
+					sum by (le) (
+						rate(http_server_request_duration_seconds_bucket{
+							datacenter=~"$datacenter",
+							pod_id=~"$pod_id",
+							operations=~"$route"
+						}[5m])
+					)
+				)`,
 				RefID:        "B",
 				LegendFormat: "p95",
 			},
 			{
 				Expr: `histogram_quantile(0.99,
-									sum by (le) (
-											rate(http_server_request_duration_seconds_bucket{
-													datacenter=~"$datacenter",
-													pod_id=~"$pod_id",
-													route=~"$route"
-											}[5m])
-									)
-								)`,
+					sum by (le) (
+						rate(http_server_request_duration_seconds_bucket{
+							datacenter=~"$datacenter",
+							pod_id=~"$pod_id",
+							operations=~"$route"
+						}[5m])
+					)
+				)`,
 				RefID:        "C",
 				LegendFormat: "p99",
 			},
 		},
 	}
 }
+
 
 func createErrorsPanel() DashboardPanel {
 	return DashboardPanel{
@@ -257,11 +264,11 @@ func createErrorsPanel() DashboardPanel {
 		Targets: []PanelTarget{
 			{
 				Expr: `sum by (status_code) (
-						rate(http_server_errors_total{
-								datacenter=~"$datacenter",
-								pod_id=~"$pod_id",
-								route=~"$route"
-						}[1m])
+					rate(http_server_errors_total{
+						datacenter=~"$datacenter",
+						pod_id=~"$pod_id",
+						operations=~"$route"
+					}[1m])
 				)`,
 				RefID:        "A",
 				LegendFormat: "{{status_code}}",
@@ -316,39 +323,15 @@ func createPrometheusVariables() []DashboardVariable {
 }
 
 func createRouteVariable(handlers []HandlerInfo) DashboardVariable {
-	options := []VariableOption{
-		{
-			Text:     "All",
-			Value:    ".*",
-			Selected: true,
-		},
-	}
-
-	seen := make(map[string]bool)
-
-	for _, handler := range handlers {
-		if seen[handler.Path] {
-			continue
-		}
-
-		seen[handler.Path] = true
-
-		options = append(options, VariableOption{
-			Text:     handler.Path,
-			Value:    handler.Path,
-			Selected: false,
-		})
-	}
-
 	return DashboardVariable{
 		Name:       "route",
-		Type:       "custom",
+		Type:       "query",
 		Label:      "Route",
+		Query:      "label_values(http_server_requests_total, operations)",
+		Refresh:    1,
 		Multi:      true,
 		IncludeAll: true,
 		AllValue:   ".*",
-		Options:    options,
-
 		Datasource: DashboardDatasource{
 			Type: "prometheus",
 			UID:  "prometheus",
@@ -412,7 +395,7 @@ func uploadDashboard(data []byte, grafanaURL string) error {
 
 	req, err := http.NewRequest(
 		http.MethodPost,
-    grafanaURL+"/api/dashboards/db",
+		grafanaURL+"/api/dashboards/db",
 		bytes.NewBuffer(body),
 	)
 	if err != nil {

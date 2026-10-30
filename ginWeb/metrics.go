@@ -24,7 +24,7 @@ func NewMetrics() *Metrics {
 				Help:    "Duration of HTTP requests",
 				Buckets: prometheus.DefBuckets,
 			},
-			[]string{"pod_id", "datacenter", "method", "route"},
+			[]string{"pod_id", "datacenter", "method", "route", "operations"},
 		),
 
 		RequestTotal: prometheus.NewCounterVec(
@@ -32,7 +32,7 @@ func NewMetrics() *Metrics {
 				Name: "http_server_requests_total",
 				Help: "Total number of HTTP requests",
 			},
-			[]string{"pod_id", "datacenter", "method", "route", "status_code"},
+			[]string{"pod_id", "datacenter", "method", "route", "operations", "status_code"},
 		),
 
 		ErrorsTotal: prometheus.NewCounterVec(
@@ -40,7 +40,7 @@ func NewMetrics() *Metrics {
 				Name: "http_server_errors_total",
 				Help: "Total number of HTTP 4xx and 5xx",
 			},
-			[]string{"pod_id", "datacenter", "method", "route", "status_code"},
+			[]string{"pod_id", "datacenter", "method", "route","operations", "status_code"},
 		),
 	}
 }
@@ -91,11 +91,14 @@ func (m *Metrics) Middleware() gin.HandlerFunc {
 			route = "unmatched"
 		}
 
+		operations := method + " " + route
+
 		labels := prometheus.Labels{
 			"pod_id":     podID,
 			"datacenter": datacenter,
 			"method":     method,
 			"route":      route,
+			"operations": operations,
 		}
 
 		m.RequestDuration.With(labels).Observe(
@@ -108,6 +111,7 @@ func (m *Metrics) Middleware() gin.HandlerFunc {
 			"method":      method,
 			"route":       route,
 			"status_code": strconv.Itoa(statusCode),
+			"operations": operations,
 		}
 
 		m.RequestTotal.With(requestLabels).Inc()

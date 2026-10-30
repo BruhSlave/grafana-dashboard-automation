@@ -5,8 +5,8 @@ import (
 	"sync"
 
 	"github.com/gin-gonic/gin"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 type album struct {
@@ -32,7 +32,7 @@ func main() {
 	metrics := NewMetrics()
 
 	if err := metrics.Register(prometheus.DefaultRegisterer); err != nil {
-			panic(err)
+		panic(err)
 	}
 
 	router := gin.Default()
