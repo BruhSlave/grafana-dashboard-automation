@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"time"
@@ -73,6 +74,8 @@ func (m *Metrics) Middleware() gin.HandlerFunc {
 		start := time.Now()
 
 		c.Next()
+
+		fmt.Println("Middleware called:", c.Request.Method, c.Request.URL.Path)
 
 		if c.Request.URL.Path == "/health" ||
 			c.Request.URL.Path == "/metrics" ||
